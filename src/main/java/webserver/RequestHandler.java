@@ -1,13 +1,15 @@
 package webserver;
 
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.Socket;
+import java.net.URISyntaxException;
+import java.nio.Buffer;
+import java.nio.charset.StandardCharsets;
 
+import http.HttpState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import utils.FileIoUtils;
 
 public class RequestHandler implements Runnable {
     private static final Logger logger = LoggerFactory.getLogger(RequestHandler.class);
@@ -24,13 +26,28 @@ public class RequestHandler implements Runnable {
 
         try (InputStream in = connection.getInputStream(); OutputStream out = connection.getOutputStream()) {
             // TODO 사용자 요청에 대한 처리는 이 곳에 구현하면 된다.
+            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
             DataOutputStream dos = new DataOutputStream(out);
-            byte[] body = "Hello World".getBytes();
+
+            String requestHeaderLine = bufferedReader.readLine();
+            logger.debug("Header : {}", requestHeaderLine);
+            HttpState httpState = getHttpState(requestHeaderLine);
+
+            byte[] body = FileIoUtils.loadFileFromClasspath("./templates" + httpState.getPath());
             response200Header(dos, body.length);
             responseBody(dos, body);
-        } catch (IOException e) {
+        } catch (IOException | URISyntaxException e) {
             logger.error(e.getMessage());
         }
+    }
+
+    public HttpState getHttpState(String requestHeader) {
+        String[] splitRequestHeader = requestHeader.split(" ");
+        String method = splitRequestHeader[0];
+        String path = splitRequestHeader[1];
+        String version = splitRequestHeader[2];
+
+        return new HttpState(method, path, version);
     }
 
     private void response200Header(DataOutputStream dos, int lengthOfBodyContent) {
